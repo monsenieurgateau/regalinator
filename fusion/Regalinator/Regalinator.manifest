@@ -1,0 +1,10 @@
+{
+    "autodeskProduct": "Fusion",
+    "type": "script",
+    "author": "",
+    "description": {
+        "": "Regalinator – baut ein Regal für Euroboxen aus Vierkant-Stahlrohr"
+    },
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}

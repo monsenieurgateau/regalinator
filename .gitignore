@@ -1,0 +1,7 @@
+# lokale Werkzeug-Einstellungen
+.claude/
+.DS_Store
+__pycache__/
+# Exporte aus dem Konfigurator
+regalinator*.json
+eurobox_regal*.json
