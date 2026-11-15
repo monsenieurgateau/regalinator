@@ -68,6 +68,9 @@
   .chip button { border: 0; background: none; cursor: pointer; font-size: 14px; line-height: 1; color: inherit; opacity: .6; padding: 0 2px; }
   .pal-add { display: flex; gap: 6px; flex-wrap: wrap; }
   .pal-add select { width: auto; padding: 5px 6px; }
+  .pal-add .eigen { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; color: var(--muted); }
+  .pal-add .eigen[hidden] { display: none; }
+  .pal-add .eigen input { width: 62px; padding: 5px 4px; }
   .pal-add button, .fachbar button { border: 1px solid var(--line); background: var(--field); color: var(--ink); border-radius: 6px;
     padding: 5px 9px; font: inherit; font-size: 13px; cursor: pointer; }
   .stage { position: relative; margin: 10px auto 0; touch-action: manipulation; }
@@ -236,6 +239,11 @@
         <div class="pal-add">
           <select id="newF" aria-label="Grundfläche neue Box"></select>
           <select id="newH" aria-label="Höhe neue Box"></select>
+          <span class="eigen" id="eigen" hidden>
+            <input type="number" id="eigL" min="50" max="2000" step="1" value="500" aria-label="Länge außen (mm)" title="Länge außen (mm)">×
+            <input type="number" id="eigB" min="50" max="2000" step="1" value="350" aria-label="Breite außen (mm)" title="Breite außen (mm)">×
+            <input type="number" id="eigH" min="20" max="1500" step="1" value="250" aria-label="Höhe außen (mm)" title="Höhe außen (mm)"> mm
+          </span>
           <button id="addType">+ Box-Typ</button>
           <button id="addFach">+ Fach</button>
         </div>
@@ -269,6 +277,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* ---------- Euroboxen (VDA-Norm, Außenmaße) ---------- */
 const FLAECHEN = { '600x400': [600, 400], '400x300': [400, 300], '300x200': [300, 200] };
+// eigene Kisten: f = 'LxB' (lange Seite zuerst), beliebige Außenmaße
+const flaeche = f => FLAECHEN[f] || String(f).split('x').map(Number).sort((a, b) => b - a);
 const HOEHEN = [75, 120, 170, 220, 270, 320, 420];
 const STAHL_RHO = 7.85e-6, HOLZ_RHO = 0.68e-6; // kg/mm³
 
@@ -298,9 +308,9 @@ if (!Array.isArray(P.faecher) || P.faecher.some(f => !Array.isArray(f.ebenen))) 
 /* ---------- Layout: berechnet alle Teile in mm (x Breite, y Tiefe ab vorne, z Höhe) ---------- */
 // Ausrichtung je Kiste: dreh true = quer (lange Seite in der Breite), false = längs, leer = automatisch:
 // längs, solange die lange Seite in die Tiefe passt, sonst quer.
-const autoQuer = (b, maxT, auto) => { const [lang, kurz] = FLAECHEN[b.f]; return auto && lang > maxT && kurz <= maxT; };
+const autoQuer = (b, maxT, auto) => { const [lang, kurz] = flaeche(b.f); return auto && lang > maxT && kurz <= maxT; };
 const masse = (b, maxT = Infinity, auto = true) => {
-  const [lang, kurz] = FLAECHEN[b.f];
+  const [lang, kurz] = flaeche(b.f);
   const quer = b.dreh === true || (b.dreh !== true && b.dreh !== false && autoQuer(b, maxT, auto));
   return { L: quer ? kurz : lang, B: quer ? lang : kurz, h: b.h, f: b.f, quer, auto: b.dreh !== true && b.dreh !== false };
 };
@@ -336,8 +346,8 @@ function layout(P0) {
   // Tiefe: an die tiefste Kiste anpassen (Standard) oder den Raum voll nutzen
   const Dbedarf = (Lmax || 300) + 2 * a + gap;
   const D = P.fitT === false ? Math.max(P.T, Dbedarf) : Dbedarf;
-  if (Dbedarf > P.T) errors.push(zuTief && Math.min(...FLAECHEN[zuTief.f]) > maxT
-    ? `Kiste ${zuTief.f.replace('x', '×')} passt auch quer nicht: braucht mind. ${Math.min(...FLAECHEN[zuTief.f]) + 2 * a + gap} mm Tiefe, verfügbar ${P.T} mm.`
+  if (Dbedarf > P.T) errors.push(zuTief && Math.min(...flaeche(zuTief.f)) > maxT
+    ? `Kiste ${zuTief.f.replace('x', '×')} passt auch quer nicht: braucht mind. ${Math.min(...flaeche(zuTief.f)) + 2 * a + gap} mm Tiefe, verfügbar ${P.T} mm.`
     : `Tiefe ${D} mm nötig (Kiste ${Lmax} mm tief + Rahmen), verfügbar ${P.T} mm – Kiste quer stellen.`);
 
   // Bodenabstand 0: die unterste Ebene steht direkt auf dem Boden – kein Riegel, keine Platte/Stangen darunter
@@ -644,6 +654,8 @@ let R;
 
 /* ---------- Baukasten: Boxen per Drag and Drop (oder antippen) in Fächer setzen ---------- */
 const FARBE = { '600x400': ['#F5C4B3', '#712B13'], '400x300': ['#9FE1CB', '#085041'], '300x200': ['#CECBF6', '#3C3489'] };
+const EIGENE_FARBEN = [['#FAC775', '#633806'], ['#B5D4F4', '#0C447C'], ['#F4C0D1', '#72243E'], ['#C0DD97', '#27500A'], ['#E3DFD3', '#4A4536']];
+const farbe = f => FARBE[f] || EIGENE_FARBEN[[...String(f)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % EIGENE_FARBEN.length];
 const label = b => `${b.f.replace('x', '×')} · ${b.h}`;
 let drag = null;          // { src: 'palette', i } | { src: 'box', fi, li, bi }
 let sel = null;           // angetippter Palette-Eintrag (Tippen statt Ziehen)
@@ -687,7 +699,7 @@ function auffuellen(fi) {
   const max = opt.max > 0 ? opt.max : Infinity;
   const vorlage = kopie ? structuredClone(fach.ebenen.at(-1).boxen) : null;
   const neueKiste = j => kopie ? { ...vorlage[j % vorlage.length] } : { ...b };
-  const obergrenze = Math.min(20, kopie ? vorlage.length : Math.floor((R.P.W - R.P.gap) / (Math.min(...FLAECHEN[b.f]) + R.P.gap)));
+  const obergrenze = Math.min(20, kopie ? vorlage.length : Math.floor((R.P.W - R.P.gap) / (Math.min(...flaeche(b.f)) + R.P.gap)));
   let luecken = 0, ebenen = 0, kisten = 0, grund = '';
   // Auffüllen füllt nach oben: ein Fach mit Kisten behält seine Breite (auch bei „Breite an Kisten anpassen“)
   const breiteVorher = P.faecher[fi].ebenen.length ? R.F[fi].cw : Infinity;
@@ -758,9 +770,9 @@ function meldung(t, fehler = false) {
 function renderPalette() {
   const pal = $('pal'); pal.innerHTML = '';
   P.palette.forEach((b, i) => {
-    const [bg, fg] = FARBE[b.f];
+    const [bg, fg] = farbe(b.f);
     const c = document.createElement('div');
-    c.className = 'chip' + (sel === i ? ' sel' : '') + (Math.min(...FLAECHEN[b.f]) > R.maxT ? ' off' : '');
+    c.className = 'chip' + (sel === i ? ' sel' : '') + (Math.min(...flaeche(b.f)) > R.maxT ? ' off' : '');
     c.style.background = bg; c.style.color = fg; c.draggable = true;
     c.title = c.classList.contains('off') ? 'Passt auch quer nicht in die verfügbare Tiefe' : 'In ein Fach ziehen oder antippen';
     c.innerHTML = `<span>${label(b)}</span><button aria-label="Box-Typ entfernen" title="Aus Palette entfernen">×</button>`;
@@ -829,7 +841,7 @@ function renderStage() {
       html += `<div class="lv${l.zuBreit ? ' zubreit' : ''}" data-fi="${fi}" data-li="${li}" title="${l.zuBreit ? 'Zu breit – Kiste entfernen oder drehen' : ''}" style="left:${px(f.x0)};bottom:${px(l.zb)};width:${px(f.cw)};height:${px(l.step)}"></div>`;
       if (!l.ohneRiegel) html += rg(l.zb);
       l.bx.forEach((b, bi) => {
-        const [bg, fg] = FARBE[b.f], w = b.B * s, h = b.h * s;
+        const [bg, fg] = farbe(b.f), w = b.B * s, h = b.h * s;
         html += `<div class="bx" draggable="true" data-fi="${fi}" data-li="${li}" data-bi="${bi}" title="${label(b)} · ${b.quer ? 'quer' : 'längs'}${b.auto ? ' (automatisch)' : ' (von Hand)'} – Klick: ${P.werkzeug === 'drehen' ? 'drehen' : 'löschen'}, Shift+Klick: drehen, ziehen: verschieben"
           style="left:${px(l.xs[bi])};bottom:${px(l.zt)};width:${w}px;height:${h}px;background:${bg};color:${fg}">${
           beschriftung(b, w, h)}</div>`;
@@ -910,12 +922,22 @@ function bindUI() {
   CHK.forEach(k => { $(k).checked = P[k]; $(k).onchange = () => { P[k] = $(k).checked; update(); }; });
   document.querySelectorAll('#bodenTyp button').forEach(b => b.onclick = () => { P.bodenTyp = b.dataset.v; update(); });
   document.querySelectorAll('#werkzeug button').forEach(b => b.onclick = () => { P.werkzeug = b.dataset.v; meldung(''); update(); });
-  $('newF').innerHTML = Object.keys(FLAECHEN).map(k => `<option value="${k}">${k.replace('x', ' × ')}</option>`).join('');
+  $('newF').innerHTML = Object.keys(FLAECHEN).map(k => `<option value="${k}">${k.replace('x', ' × ')}</option>`).join('')
+    + '<option value="eigen">Eigene Maße …</option>';
+  const eigenAn = () => { const an = $('newF').value === 'eigen'; $('eigen').hidden = !an; $('newH').hidden = an; };
+  $('newF').onchange = eigenAn; eigenAn();
   $('newH').innerHTML = HOEHEN.map(h => `<option value="${h}" ${h === 220 ? 'selected' : ''}>${h} mm</option>`).join('');
   $('addType').onclick = () => {
-    const b = box($('newF').value, Number($('newH').value));
-    if (!P.palette.some(p => p.f === b.f && p.h === b.h)) P.palette.push(b);
-    update();
+    let b;
+    if ($('newF').value === 'eigen') {
+      const L = Math.round(Number($('eigL').value)), B = Math.round(Number($('eigB').value)), H = Math.round(Number($('eigH').value));
+      if (!(L >= 50 && L <= 2000 && B >= 50 && B <= 2000 && H >= 20 && H <= 1500)) {
+        meldung('Eigene Kiste: Länge und Breite 50–2000 mm, Höhe 20–1500 mm eingeben.', true); return;
+      }
+      b = box(`${Math.max(L, B)}x${Math.min(L, B)}`, H);
+    } else b = box($('newF').value, Number($('newH').value));
+    if (P.palette.some(p => p.f === b.f && p.h === b.h)) { meldung(`„${label(b)}“ ist schon in der Palette.`); return; }
+    P.palette.push(b); meldung(`„${label(b)}“ hinzugefügt – jetzt in ein Fach ziehen.`); update();
   };
   $('addFach').onclick = () => {
     const r = probiere(fc => fc.push({ breite: 0, ebenen: [] }));
@@ -1058,7 +1080,7 @@ function zeichnung(R) {
   for (const p of R.parts) if (p.group === 'holz') rect(X(p.x), Y(p.z + p.lz), p.lx * s, p.lz * s, farbe.holz);
   g.font = '15px sans-serif';
   for (const p of R.parts) if (p.kind === 'box') {
-    const f = p.art.split('×').slice(0, 2).join('x'), [bg, fg] = FARBE[f] || ['#ddd', '#333'];
+    const f = p.art.split('×').slice(0, 2).join('x'), [bg, fg] = farbe(f);
     rect(X(p.x), Y(p.z + p.lz), p.lx * s, p.lz * s, bg, '#8a8f96');
     if (p.lx * s > 70 && p.lz * s > 34) {
       g.fillStyle = fg; g.textAlign = 'center';

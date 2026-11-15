@@ -9,6 +9,7 @@ Ein Konfigurator im Browser für Regale aus **Vierkant-Stahlrohr**, in die **Eur
 ## Was er kann
 
 - **Baukasten:** Kisten aus der Palette per Drag and Drop (oder antippen) in die Fächer setzen, Größen frei mischen – auch auf einer Ebene. Klick auf eine Kiste löscht sie, mit dem Werkzeug „Drehen“ oder Shift + Klick wird sie gedreht.
+- **Eigene Kisten:** Neben den Euronorm-Größen auch beliebige Kisten mit eigenen Außenmaßen (Länge × Breite × Höhe) in die Palette aufnehmen.
 - **Automatisch drehen:** 600 × 400-Kisten stellen sich quer, wenn die Regaltiefe nicht reicht.
 - **Auffüllen:** Ein Fach mit einer gewählten Kiste bis oben füllen, optional mit Höchstzahl.
 - **Kopieren und einfügen:** Ein fertig belegtes Fach kopieren und in ein anderes Fach einfügen (überschreibt dessen Inhalt).
