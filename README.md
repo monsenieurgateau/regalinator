@@ -11,7 +11,8 @@ Ein Konfigurator im Browser für Regale aus **Vierkant-Stahlrohr**, in die **Eur
 - **Baukasten:** Kisten aus der Palette per Drag and Drop (oder antippen) in die Fächer setzen, Größen frei mischen – auch auf einer Ebene. Klick auf eine Kiste löscht sie, mit dem Werkzeug „Drehen“ oder Shift + Klick wird sie gedreht.
 - **Automatisch drehen:** 600 × 400-Kisten stellen sich quer, wenn die Regaltiefe nicht reicht.
 - **Auffüllen:** Ein Fach mit einer gewählten Kiste bis oben füllen, optional mit Höchstzahl.
-- **Maße:** Regal füllt den verfügbaren Raum – oder passt Breite und Höhe automatisch an die Kisten an.
+- **Kopieren und einfügen:** Ein fertig belegtes Fach kopieren und rechts neben einem anderen Fach einfügen.
+- **Maße:** Regal füllt den verfügbaren Raum – oder passt Breite, Tiefe und Höhe einzeln automatisch an die Kisten an.
 - **Böden:** Holzplatte (Nussbaum, Eiche, Kirsche, Birke Multiplex) oder Vierkant-Auflagestangen unter jeder Kiste. Optional Abdeckplatte oben. Bodenabstand 0 = unterste Kisten stehen direkt auf dem Boden.
 - **Materialliste:** Bestellmenge in Stangen einstellbarer Lieferlänge (z. B. 6 m) inklusive Sägeschnitt, optimierter Schnittplan, Verschnitt, Gewicht, Holzfläche – auch als CSV für Excel.
 - **Prüfung:** Alles, was nicht passt (zu breit, zu hoch, zu tief), wird sofort mit Begründung gemeldet.

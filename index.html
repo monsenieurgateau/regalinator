@@ -134,8 +134,9 @@
       <label class="f">Höhe <input type="number" id="H" step="10"></label>
     </div>
     <label class="check"><input type="checkbox" id="fitB"> Breite an Kisten anpassen</label>
+    <label class="check"><input type="checkbox" id="fitT"> Tiefe an Kisten anpassen</label>
     <label class="check"><input type="checkbox" id="fitH"> Höhe an Kisten anpassen</label>
-    <p class="hint" id="fitHint">Angehakt: Das Regal wird nur so breit bzw. hoch wie die Kisten brauchen. Breite und Höhe oben sind dann das Maximum.</p>
+    <p class="hint" id="fitHint">Angehakt: Das Regal wird nur so breit, tief bzw. hoch wie die Kisten brauchen – die Werte oben sind dann das Maximum. Ohne Haken nutzt es den Raum voll aus.</p>
 
     <h2>Material: Vierkantrohr Stahl</h2>
     <div class="grid2">
@@ -264,7 +265,7 @@ const box = (f, h) => ({ f, h });
 const DEFAULT = {
   W: 2100, T: 700, H: 1100, profil: '30x2', boden: 40,
   bodenTyp: 'holz', holz_s: 18, holz_art: 'walnut', stange_profil: 'rahmen', stange_ein: 15, top: true,
-  gap: 10, luft: 30, showBoxes: true, stock: 6000, kerf: 3, werkzeug: 'loeschen', autoDreh: true, fitB: false, fitH: false,
+  gap: 10, luft: 30, showBoxes: true, stock: 6000, kerf: 3, werkzeug: 'loeschen', autoDreh: true, fitB: false, fitT: true, fitH: false,
   // Box-Palette (die „verschiedenen Euroboxen“) und Fächer: jede Ebene hat ihre eigenen Boxen
   // Standardkisten: 600×400×320, 400×300×220, 600×400×220
   palette: [box(G, 320), box(A, 220), box(G, 220)],
@@ -320,8 +321,10 @@ function layout(P0) {
   P.faecher.forEach(f => f.ebenen.forEach(e => e.boxen.forEach(b => {
     const m = masse(b, maxT, autoD); Lmax = Math.max(Lmax, m.L); if (m.L > maxT && !zuTief) zuTief = m;
   })));
-  const D = (Lmax || 300) + 2 * a + gap;
-  if (D > P.T) errors.push(zuTief && Math.min(...FLAECHEN[zuTief.f]) > maxT
+  // Tiefe: an die tiefste Kiste anpassen (Standard) oder den Raum voll nutzen
+  const Dbedarf = (Lmax || 300) + 2 * a + gap;
+  const D = P.fitT === false ? Math.max(P.T, Dbedarf) : Dbedarf;
+  if (Dbedarf > P.T) errors.push(zuTief && Math.min(...FLAECHEN[zuTief.f]) > maxT
     ? `Kiste ${zuTief.f.replace('x', '×')} passt auch quer nicht: braucht mind. ${Math.min(...FLAECHEN[zuTief.f]) + 2 * a + gap} mm Tiefe, verfügbar ${P.T} mm.`
     : `Tiefe ${D} mm nötig (Kiste ${Lmax} mm tief + Rahmen), verfügbar ${P.T} mm – Kiste quer stellen.`);
 
@@ -621,7 +624,7 @@ new ResizeObserver(resize).observe(view);
 /* ---------- UI ---------- */
 const $ = id => document.getElementById(id);
 const NUM = ['W', 'T', 'H', 'boden', 'holz_s', 'stange_ein', 'gap', 'luft', 'stock', 'kerf'];
-const SEL = ['profil', 'holz_art', 'stange_profil'], CHK = ['top', 'showBoxes', 'autoDreh', 'fitB', 'fitH'];
+const SEL = ['profil', 'holz_art', 'stange_profil'], CHK = ['top', 'showBoxes', 'autoDreh', 'fitB', 'fitT', 'fitH'];
 let R;
 
 /* ---------- Baukasten: Boxen per Drag and Drop (oder antippen) in Fächer setzen ---------- */
@@ -645,7 +648,7 @@ function probiere(mutate) {
   mutate(fc);
   const R2 = layout({ ...P, faecher: fc });
   const neu = R2.errors.filter(e => !R.errors.includes(e));
-  return { ok: !neu.length, grund: neu[0], fc };
+  return { ok: !neu.length, grund: neu[0], fc, R2 };
 }
 function passt(d, ziel) {
   const key = JSON.stringify([d, ziel]);
@@ -657,34 +660,67 @@ function setze(d, ziel) {
   if (!r.ok) { meldung('Passt nicht: ' + r.grund, true); return; }
   P.faecher = r.fc; meldung(''); update();
 }
-// Auffüllen: neue Ebenen mit gewählter Kiste (so viele nebeneinander wie passen), höchstens „max“ Kisten
+// Auffüllen: 1) Lücken in bestehenden Ebenen mit der gewählten Kiste schließen (nur wo sie nicht höher ist als die Ebene),
+// 2) neue Ebenen oben anlegen – jeweils so viele Kisten nebeneinander, wie wirklich passen (auch wenn das Fach dafür
+// breiter werden darf). Höchstens „max“ Kisten insgesamt.
 function auffuellen(fi) {
   const fach = P.faecher[fi], opt = fach.fuell || { typ: 0, max: 0 };
   const kopie = opt.typ === 'kopie';
   if (kopie && !fach.ebenen.length) { meldung(`Fach ${fi + 1} ist leer – „wie oberste Ebene“ geht erst, wenn eine Ebene da ist.`, true); return; }
   const b = kopie ? null : P.palette[opt.typ];
   if (!kopie && !b) { meldung('Bitte eine Kiste zum Auffüllen wählen.', true); return; }
-  const cw = R.F[fi].cw;
-  const proEbene = kopie ? fach.ebenen.at(-1).boxen.length : Math.floor((cw - P.gap) / (masse(b, R.maxT, P.autoDreh !== false).B + P.gap));
-  if (proEbene < 1) { meldung(`${label(b)} ist zu breit für Fach ${fi + 1} (${cw} mm).`, true); return; }
   const max = opt.max > 0 ? opt.max : Infinity;
-  let ebenen = 0, kisten = 0, grund = '';
-  for (let guard = 0; guard < 50 && kisten < max; guard++) {
-    const k = Math.min(proEbene, max - kisten);
-    const neu = kopie ? structuredClone(fach.ebenen.at(-1)).boxen.slice(0, k) : Array.from({ length: k }, () => ({ ...b }));
-    const r = probiere(fc => fc[fi].ebenen.push({ boxen: neu }));
-    if (!r.ok) { grund = r.grund; break; }
-    P.faecher = r.fc; R = layout(P); ebenen++; kisten += k;
+  const vorlage = kopie ? structuredClone(fach.ebenen.at(-1).boxen) : null;
+  const neueKiste = j => kopie ? { ...vorlage[j % vorlage.length] } : { ...b };
+  const obergrenze = Math.min(20, kopie ? vorlage.length : Math.floor((R.P.W - R.P.gap) / (Math.min(...FLAECHEN[b.f]) + R.P.gap)));
+  let luecken = 0, ebenen = 0, kisten = 0, grund = '';
+  // Auffüllen füllt nach oben: ein Fach mit Kisten behält seine Breite (auch bei „Breite an Kisten anpassen“)
+  const breiteVorher = P.faecher[fi].ebenen.length ? R.F[fi].cw : Infinity;
+  const passt = mutate => { const r = probiere(mutate); return r.ok && r.R2.F[fi].cw <= breiteVorher + 0.01 ? r : { ...r, ok: false }; };
+
+  // 1) Lücken schließen
+  if (!kopie) {
+    for (let li = 0; li < P.faecher[fi].ebenen.length && kisten < max; li++) {
+      const hEbene = Math.max(...P.faecher[fi].ebenen[li].boxen.map(x => x.h));
+      if (b.h > hEbene) continue;
+      for (let g = 0; g < 20 && kisten < max; g++) {
+        const r = passt(fc => fc[fi].ebenen[li].boxen.push({ ...b }));
+        if (!r.ok) break;
+        P.faecher = r.fc; R = layout(P); luecken++; kisten++;
+      }
+    }
   }
+  // 2) neue Ebenen: größte Anzahl nebeneinander suchen, die passt
+  for (let guard = 0; guard < 50 && kisten < max; guard++) {
+    let ok = null;
+    for (let k = Math.min(obergrenze, max - kisten); k >= 1; k--) {
+      const neu = Array.from({ length: k }, (_, j) => neueKiste(j));
+      const r = passt(fc => fc[fi].ebenen.push({ boxen: neu }));
+      if (r.ok) { ok = { r, k }; break; }
+      if (k === 1) grund = r.grund || '';   // Grund vom kleinsten Versuch (eine Kiste) ist der aussagekräftigste
+    }
+    if (!ok) break;
+    P.faecher = ok.r.fc; R = layout(P); ebenen++; kisten += ok.k;
+  }
+
   const mz = (n, e, m) => `${n} ${n === 1 ? e : m}`;
-  if (ebenen) meldung(`Fach ${fi + 1}: ${mz(ebenen, 'Ebene', 'Ebenen')} mit ${mz(kisten, 'Kiste', 'Kisten')} ergänzt` +
-    (kisten >= max ? ' – Maximum erreicht.' : ' – Fach ist jetzt voll.'));
-  else if (/zu hoch/.test(grund)) {
-    const f = R.F[fi], frei = Math.max(0, Math.round(R.zTopMax - f.zFree - R.a - R.P.luft));
-    const braucht = kopie ? Math.max(...fach.ebenen.at(-1).boxen.map(x => x.h)) : b.h;
-    meldung(`Fach ${fi + 1} ist voll: über der obersten Ebene sind noch ${frei} mm frei, die Kiste braucht ${braucht} mm.`, true);
-  } else meldung(`Fach ${fi + 1}: ${grund.replace(/^Fach \d+, /, '')}`, true);
+  if (kisten) {
+    const teile = [];
+    if (luecken) teile.push(`${mz(luecken, 'Kiste', 'Kisten')} in Lücken`);
+    if (ebenen) teile.push(`${mz(ebenen, 'neue Ebene', 'neue Ebenen')} mit ${mz(kisten - luecken, 'Kiste', 'Kisten')}`);
+    meldung(`Fach ${fi + 1}: ${teile.join(' und ')} ergänzt` + (kisten >= max ? ' – Maximum erreicht.' : ' – mit dieser Kiste ist das Fach jetzt voll.') + passtNoch(fi));
+  } else {
+    meldung(`Fach ${fi + 1}: Mit ${kopie ? 'der obersten Ebene' : label(b)} passt nichts mehr hinein` +
+      (/zu hoch/.test(grund) ? ` (oben noch ${freiOben(fi)} mm frei).` : grund ? ` (${grund.replace(/^Fach \d+(, )?/, '').replace(/^: /, '')})` : '.') + passtNoch(fi), true);
+  }
   update();
+}
+// freie Kistenhöhe über der obersten Ebene eines Fachs
+const freiOben = fi => Math.max(0, Math.round(R.zTopMax - R.F[fi].zFree - R.a - R.P.luft));
+// Hinweis, welche Kisten aus der Palette oben noch als neue Ebene passen würden
+function passtNoch(fi) {
+  const typen = P.palette.filter(x => probiere(fc => fc[fi].ebenen.push({ boxen: [{ ...x }] })).ok);
+  return typen.length ? ` Oben passt noch: ${typen.map(label).join(', ')}.` : '';
 }
 const beschriftung = (b, w, h) => {
   const [L, B] = b.f.split('x');
@@ -755,6 +791,7 @@ function kisteKlick(d, shift) {
   if (!r.ok) { meldung('Passt gedreht nicht: ' + r.grund, true); return; }
   P.faecher = r.fc; meldung(''); update();
 }
+let ablage = null;   // kopiertes Fach { von: Index oder null, fach }
 function renderStage() {
   fitCache.clear();
   const stage = $('stage'), bar = $('fachbar');
@@ -815,7 +852,11 @@ function renderStage() {
       <span class="grp"><label>Auffüllen mit <select data-typ="${fi}" aria-label="Kiste zum Auffüllen">${optionen}</select></label>
         <label>max. <input class="klein" type="number" min="0" step="1" placeholder="alle" value="${opt.max || ''}" data-max="${fi}"> Kisten</label>
         <button class="fill" data-fill="${fi}">Auffüllen</button></span>
-      <button data-del="${fi}" title="Fach entfernen">Fach löschen</button>
+      <span class="grp">
+        <button data-kopie="${fi}" title="Fach mit allen Ebenen und Kisten kopieren">${ablage && ablage.von === fi ? 'Kopiert ✓' : 'Kopieren'}</button>
+        ${ablage && ablage.von !== fi ? `<button data-einf="${fi}" title="Inhalt von Fach ${fi + 1} durch das kopierte Fach ersetzen">Hier einfügen</button>` : ''}
+        <button data-del="${fi}" title="Fach entfernen">Fach löschen</button>
+      </span>
     </div>`;
   }).join('');
   const fuell = fi => (P.faecher[fi].fuell ||= { typ: 0, max: 0 });
@@ -823,7 +864,25 @@ function renderStage() {
   bar.querySelectorAll('[data-typ]').forEach(el => el.onchange = () => { const v = el.value; fuell(+el.dataset.typ).typ = v === 'kopie' ? v : +v; save(); });
   bar.querySelectorAll('[data-max]').forEach(el => el.oninput = () => { fuell(+el.dataset.max).max = Math.max(0, Math.floor(Number(el.value) || 0)); save(); });
   bar.querySelectorAll('[data-fill]').forEach(b => b.onclick = () => auffuellen(+b.dataset.fill));
-  bar.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { P.faecher.splice(+b.dataset.del, 1); update(); });
+  bar.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    const fi = +b.dataset.del;
+    P.faecher.splice(fi, 1);
+    if (ablage && ablage.von != null) ablage.von = ablage.von === fi ? null : ablage.von - (ablage.von > fi);
+    update();
+  });
+  bar.querySelectorAll('[data-kopie]').forEach(b => b.onclick = () => {
+    const fi = +b.dataset.kopie;
+    ablage = { von: fi, fach: structuredClone(P.faecher[fi]) };
+    meldung(`Fach ${fi + 1} kopiert – jetzt beim Ziel-Fach „Hier einfügen“ klicken. Das Ziel wird überschrieben.`); renderStage();
+  });
+  bar.querySelectorAll('[data-einf]').forEach(b => b.onclick = () => {
+    const fi = +b.dataset.einf;
+    // Ziel-Fach wird komplett überschrieben (Ebenen, Kisten, Breite, Auffüll-Einstellung)
+    const r = probiere(fc => { fc[fi] = structuredClone(ablage.fach); });
+    if (!r.ok) { meldung('Einfügen passt nicht: ' + r.grund, true); return; }
+    P.faecher = r.fc;
+    meldung(`Fach ${fi + 1} überschrieben mit der Kopie${ablage.von != null ? ' von Fach ' + (ablage.von + 1) : ''}.`); update();
+  });
   stage.classList.toggle('armed', sel != null);
   stage.classList.toggle('tool-drehen', P.werkzeug === 'drehen');
   document.querySelectorAll('#werkzeug button').forEach(b => b.classList.toggle('on', b.dataset.v === (P.werkzeug || 'loeschen')));
@@ -848,7 +907,9 @@ function bindUI() {
     if (!r.ok) { meldung('Kein Platz für ein weiteres Fach – Raumbreite erhöhen oder Boxen umverteilen.', true); return; }
     P.faecher = r.fc; meldung('Fach angelegt – jetzt Boxen hineinziehen.'); update();
   };
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && sel != null) { sel = null; renderPalette(); renderStage(); meldung(''); } });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && (sel != null || ablage)) { sel = null; ablage = null; renderPalette(); renderStage(); meldung(''); }
+  });
   document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => setCam(b.dataset.cam, R));
   $('export').onclick = exportJSON;
   $('csv').onclick = exportCSV;
