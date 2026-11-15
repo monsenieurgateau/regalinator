@@ -29,6 +29,8 @@
   .badge { position: absolute; left: 14px; top: 12px; color: #e9e7e3; font-size: 13px;
     background: rgba(0,0,0,.35); padding: 6px 10px; border-radius: 6px; font-variant-numeric: tabular-nums; }
   .viewbtns { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; }
+  .viewbtns .glas { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,0,0,.4); color: #eee;
+    border: 1px solid rgba(255,255,255,.15); border-radius: 6px; padding: 4px 9px; font-size: 12px; cursor: pointer; }
   .viewbtns button { background: rgba(0,0,0,.4); color: #eee; border: 1px solid rgba(255,255,255,.15);
     border-radius: 6px; padding: 5px 9px; font-size: 12px; cursor: pointer; }
   h1 { font-size: 18px; margin: 0 0 2px; }
@@ -38,7 +40,7 @@
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   label.f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
-  input[type=number], select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px;
+  input[type=number], input[type=text], select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px;
     background: var(--field); color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
   .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg button { border: 0; padding: 9px; background: var(--field); color: var(--ink); font: inherit; cursor: pointer; }
@@ -127,6 +129,14 @@
     <h1>Regalinator</h1>
     <p class="sub">Vierkant-Stahlrahmen mit Holzböden oder Stahlstangen</p>
 
+    <h2>Projekt</h2>
+    <label class="f">Projektname <input type="text" id="name" placeholder="Mein Regal" maxlength="60"></label>
+    <div class="grid2" style="margin-top:8px">
+      <button class="btn" id="projSave" style="margin:0">Projekt speichern</button>
+      <button class="btn" id="projOpen" style="margin:0">Projekt öffnen</button>
+    </div>
+    <input type="file" id="projFile" accept=".json,application/json" hidden>
+
     <h2>Verfügbarer Platz (mm)</h2>
     <div class="grid3">
       <label class="f">Breite <input type="number" id="W" step="10"></label>
@@ -205,7 +215,7 @@
 
     <h2>Nach Fusion</h2>
     <button class="btn primary" id="export">Für Fusion exportieren</button>
-    <button class="btn" id="csv">Materialliste als CSV (Excel)</button>
+    <button class="btn" id="xlsx">Materialliste als Excel (.xlsx)</button>
     <p class="hint">Speichert <b>regalinator.json</b> in „Downloads“. Danach in Fusion das Skript
       <b>Regalinator</b> ausführen – es nimmt automatisch die neueste Datei.</p>
     <div class="msg" id="msg"></div>
@@ -215,6 +225,7 @@
     <div id="view">
       <div class="badge" id="badge"></div>
       <div class="viewbtns">
+        <label class="glas"><input type="checkbox" id="glas"> Kisten durchsichtig</label>
         <button data-cam="iso">3D</button><button data-cam="front">Vorne</button><button data-cam="side">Seite</button>
       </div>
     </div>
@@ -265,7 +276,7 @@ const box = (f, h) => ({ f, h });
 const DEFAULT = {
   W: 2100, T: 700, H: 1100, profil: '30x2', boden: 40,
   bodenTyp: 'holz', holz_s: 18, holz_art: 'walnut', stange_profil: 'rahmen', stange_ein: 15, top: true,
-  gap: 10, luft: 30, showBoxes: true, stock: 6000, kerf: 3, werkzeug: 'loeschen', autoDreh: true, fitB: false, fitT: true, fitH: false,
+  gap: 10, luft: 30, showBoxes: true, stock: 6000, kerf: 3, werkzeug: 'loeschen', autoDreh: true, fitB: false, fitT: true, fitH: false, glas: false, name: 'Mein Regal',
   // Box-Palette (die „verschiedenen Euroboxen“) und Fächer: jede Ebene hat ihre eigenen Boxen
   // Standardkisten: 600×400×320, 400×300×220, 600×400×220
   palette: [box(G, 320), box(A, 220), box(G, 220)],
@@ -583,6 +594,9 @@ function build(R) {
   model.traverse(o => { if (o.geometry) o.geometry.dispose(); });
   model = new THREE.Group();
   const wm = woodMat(P.holz_art);
+  for (const m of [matBox, matBoxIn]) {          // Kisten halb durchsichtig (Schalter oben in der 3D-Ansicht)
+    m.transparent = !!P.glas; m.opacity = P.glas ? 0.28 : 1; m.depthWrite = !P.glas; m.needsUpdate = true;
+  }
   for (const p of R.parts) {
     if (p.kind === 'tube') addBox(model, matSteel, p.x, p.y, p.z, p.lx, p.ly, p.lz);
     else if (p.kind === 'board') {
@@ -624,7 +638,7 @@ new ResizeObserver(resize).observe(view);
 /* ---------- UI ---------- */
 const $ = id => document.getElementById(id);
 const NUM = ['W', 'T', 'H', 'boden', 'holz_s', 'stange_ein', 'gap', 'luft', 'stock', 'kerf'];
-const SEL = ['profil', 'holz_art', 'stange_profil'], CHK = ['top', 'showBoxes', 'autoDreh', 'fitB', 'fitT', 'fitH'];
+const SEL = ['profil', 'holz_art', 'stange_profil'], CHK = ['top', 'showBoxes', 'autoDreh', 'fitB', 'fitT', 'fitH', 'glas'];
 let R;
 
 /* ---------- Baukasten: Boxen per Drag and Drop (oder antippen) in Fächer setzen ---------- */
@@ -912,7 +926,12 @@ function bindUI() {
   });
   document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => setCam(b.dataset.cam, R));
   $('export').onclick = exportJSON;
-  $('csv').onclick = exportCSV;
+  $('xlsx').onclick = exportXLSX;
+  $('name').value = P.name || '';
+  $('name').oninput = () => { P.name = $('name').value; save(); };
+  $('projSave').onclick = projektSpeichern;
+  $('projOpen').onclick = () => $('projFile').click();
+  $('projFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) projektOeffnen(f); };
   $('zurListe').onclick = () => $('bom').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function fmt(n) { return Math.round(n).toLocaleString('de-DE'); }
@@ -976,17 +995,242 @@ function exportJSON() {
   download('regalinator.json', JSON.stringify(data, null, 1), 'application/json');
   $('msg').innerHTML = '<span class="ok">Exportiert. Jetzt in Fusion das Skript „Regalinator“ ausführen.</span>';
 }
-function exportCSV() {
-  const B = bom(R), ML = materialliste(R, R.P), num = v => String(Math.round(v * 100) / 100).replace('.', ',');
-  const lines = ['MATERIALLISTE (Bestellung)', `Material;Stangen à ${P.stock} mm;Bestellmenge m;Bedarf m;Verschnitt %;Gewicht kg`];
-  ML.forEach(m => lines.push(`${m.label};${m.bars};${num(m.brutto / 1000)};${num(m.netto / 1000)};${num(m.verschnitt * 100)};${num(m.kg)}`));
-  lines.push('', 'SCHNITTPLAN', 'Material;Anzahl Stangen;Teile (mm);Rest mm');
-  ML.forEach(m => m.muster.forEach(x => lines.push(`${m.label};${x.n};${x.cuts};${x.rest}`)));
-  lines.push('', 'ZUSCHNITT / STÜCKLISTE', 'Anzahl;Teil;Maß');
-  for (const o of [B.steel, B.wood, B.boxes]) for (const [k, n] of Object.entries(o)) {
-    const [art, mass] = k.split('|'); lines.push(`${n};${art};${mass || ''}`);
+/* ---------- Projektdatei ---------- */
+const dateiname = () => (P.name || 'Regal').trim().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'Regal';
+function formularFuellen() {
+  NUM.forEach(k => { $(k).value = P[k]; });
+  SEL.forEach(k => { $(k).value = P[k]; });
+  CHK.forEach(k => { $(k).checked = !!P[k]; });
+  $('name').value = P.name || '';
+}
+function projektSpeichern() {
+  const data = { app: 'Regalinator', format: 1, gespeichert: new Date().toISOString(), projekt: P };
+  download(`${dateiname()}.regalinator-projekt.json`, JSON.stringify(data, null, 1), 'application/json');
+  $('msg').innerHTML = `<span class="ok">Projekt „${P.name || 'Regal'}“ gespeichert (Ordner „Downloads“).</span>`;
+}
+async function projektOeffnen(datei) {
+  try {
+    const d = JSON.parse(await datei.text());
+    const pr = d && d.app === 'Regalinator' ? d.projekt : null;
+    if (!pr || !Array.isArray(pr.faecher) || pr.faecher.some(f => !Array.isArray(f.ebenen)) || !Array.isArray(pr.palette))
+      throw new Error('Das ist keine Regalinator-Projektdatei.');
+    P = Object.assign(structuredClone(DEFAULT), pr);
+    sel = null; ablage = null;
+    formularFuellen(); meldung(''); update(); lastSize = null; setCam('iso', R);
+    $('msg').innerHTML = `<span class="ok">Projekt „${P.name || datei.name}“ geöffnet.</span>`;
+  } catch (e) {
+    $('msg').innerHTML = `<div class="e">Öffnen fehlgeschlagen: ${e.message}</div>`;
   }
-  download('regalinator_materialliste.csv', '﻿' + lines.join('\n'), 'text/csv');
+}
+
+/* ---------- Bemaßte Zeichnung (Ansicht vorne und Seite) ---------- */
+function zeichnung(R) {
+  const W = R.W, H = R.H, D = R.D, a = R.a;
+  const s = Math.min(1150 / W, 780 / H, 330 / D, 1430 / (W + D));
+  const ox = 150, oy = 240 + H * s, sx = ox + W * s + 280;
+  const c = document.createElement('canvas'); c.width = 2000; c.height = Math.round(oy + 150);   // Höhe passt sich dem Regal an
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  const X = x => ox + x * s, Y = z => oy - z * s, XS = y => sx + y * s;
+  const ROT = '#c0392b', farbe = { stahl: '#2a2c30', holz: '#9a5a33' };
+  const datum = new Date().toLocaleDateString('de-DE');
+
+  g.fillStyle = '#1d1f23'; g.font = 'bold 36px sans-serif'; g.fillText(`Regalinator – ${R.P.name || 'Regal'}`, 40, 55);
+  g.fillStyle = '#555'; g.font = '22px sans-serif';
+  g.fillText(`Regal ${fmt(W)} × ${fmt(D)} × ${fmt(H)} mm (B × T × H) · Maße in mm · ${datum}`, 40, 92);
+  g.font = 'bold 22px sans-serif'; g.fillStyle = '#1d1f23';
+  g.fillText('Ansicht von vorne', ox, Y(H) - 80); g.fillText('Ansicht von der Seite', sx, Y(H) - 80);
+
+  const rect = (x, y, w, h, fill, stroke) => { g.fillStyle = fill; g.fillRect(x, y, w, h); if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1; g.strokeRect(x, y, w, h); } };
+  const bem = (x1, y1, x2, y2, text, senkrecht) => {
+    g.strokeStyle = ROT; g.fillStyle = ROT; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+    for (const [x, y] of [[x1, y1], [x2, y2]]) { g.beginPath(); g.moveTo(x - 7, y + 7); g.lineTo(x + 7, y - 7); g.stroke(); }
+    g.font = 'bold 20px sans-serif'; g.textAlign = 'center';
+    if (senkrecht) { g.save(); g.translate(x1 - 10, (y1 + y2) / 2); g.rotate(-Math.PI / 2); g.fillText(text, 0, 0); g.restore(); }
+    else g.fillText(text, (x1 + x2) / 2, y1 - 9);
+    g.textAlign = 'left';
+  };
+  const hilfslinie = (x1, y1, x2, y2) => { g.strokeStyle = '#bbb'; g.lineWidth = 1; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+
+  // Ansicht vorne: Holz, Kisten, dann Stahl
+  for (const p of R.parts) if (p.group === 'holz') rect(X(p.x), Y(p.z + p.lz), p.lx * s, p.lz * s, farbe.holz);
+  g.font = '15px sans-serif';
+  for (const p of R.parts) if (p.kind === 'box') {
+    const f = p.art.split('×').slice(0, 2).join('x'), [bg, fg] = FARBE[f] || ['#ddd', '#333'];
+    rect(X(p.x), Y(p.z + p.lz), p.lx * s, p.lz * s, bg, '#8a8f96');
+    if (p.lx * s > 70 && p.lz * s > 34) {
+      g.fillStyle = fg; g.textAlign = 'center';
+      g.fillText(p.art.split('×').slice(0, 2).join('×') + (p.lx > p.ly ? ' quer' : ''), X(p.x + p.lx / 2), Y(p.z + p.lz / 2) - 2);
+      g.fillText(`${p.lz} hoch`, X(p.x + p.lx / 2), Y(p.z + p.lz / 2) + 17); g.textAlign = 'left';
+    }
+  }
+  for (const p of R.parts) if (p.group === 'stahl' && p.y < a + 0.1) rect(X(p.x), Y(p.z + p.lz), Math.max(1, p.lx * s), Math.max(1, p.lz * s), farbe.stahl);
+  // Höhe der Standflächen je Ebene
+  g.font = 'bold 15px sans-serif';
+  R.F.forEach(f => f.levels.forEach(l => {
+    const t = `▲ ${fmt(l.zt)}`, w = g.measureText(t).width + 10, x = X(f.x0) + 4, y = Y(l.zt) - 22;
+    g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(x, y, w, 19); g.fillStyle = '#1d4f91'; g.fillText(t, x + 5, y + 15);
+  }));
+  // Maße vorne
+  hilfslinie(X(0), Y(0) + 4, X(0), Y(0) + 72); hilfslinie(X(W), Y(0) + 4, X(W), Y(0) + 72);
+  bem(X(0), Y(0) + 62, X(W), Y(0) + 62, `${fmt(W)}`);
+  R.F.forEach(f => bem(X(f.x0), Y(H) - 30, X(f.x0 + f.cw), Y(H) - 30, `${fmt(f.cw)}`));
+  hilfslinie(X(W) + 4, Y(0), X(W) + 80, Y(0)); hilfslinie(X(W) + 4, Y(H), X(W) + 80, Y(H));
+  bem(X(W) + 70, Y(0), X(W) + 70, Y(H), `${fmt(H)}`, true);
+  if (R.P.boden > 0) bem(X(0) - 45, Y(0), X(0) - 45, Y(R.P.boden), `${fmt(R.P.boden)}`, true);
+
+  // Ansicht Seite (von links): Kisten, Holz, Stahl
+  for (const p of R.parts) if (p.kind === 'box' && p.x < R.F[0].x0 + R.F[0].cw) rect(XS(p.y), Y(p.z + p.lz), p.ly * s, p.lz * s, '#e9ebee', '#9aa0a6');
+  const imFach1 = p => p.x < R.F[0].x0 + R.F[0].cw;   // Seitenansicht zeigt das linke Fach
+  for (const p of R.parts) if (p.group === 'holz' && (imFach1(p) || p.name === 'Abdeckplatte')) rect(XS(p.y), Y(p.z + p.lz), p.ly * s, p.lz * s, farbe.holz);
+  for (const p of R.parts) if (p.group === 'stahl' && p.x < a + 0.1) rect(XS(p.y), Y(p.z + p.lz), Math.max(1, p.ly * s), Math.max(1, p.lz * s), farbe.stahl);
+  hilfslinie(XS(0), Y(0) + 4, XS(0), Y(0) + 72); hilfslinie(XS(D), Y(0) + 4, XS(D), Y(0) + 72);
+  bem(XS(0), Y(0) + 62, XS(D), Y(0) + 62, `${fmt(D)}`);
+  bem(XS(D) + 70, Y(0), XS(D) + 70, Y(H), `${fmt(H)}`, true);
+  hilfslinie(XS(D) + 4, Y(H), XS(D) + 80, Y(H));
+
+  g.fillStyle = '#555'; g.font = '19px sans-serif';
+  g.fillText(`▲ = Höhe der Standfläche der Kisten über dem Boden · Rot = Maße (Fachbreiten oben sind Lichtmaße zwischen den Pfosten) · Profil ${R.P.profil.replace('x', '×').replace(/(\d+)×/, '$1×$1×').replace('×0', ' voll')}`, 40, c.height - 30);
+  return { url: c.toDataURL('image/png'), w: c.width, h: c.height };
+}
+// 3D-Bild in Schrägansicht, Kamera danach zurücksetzen
+function bild3D() {
+  const pos = camera.position.clone(), tgt = controls.target.clone();
+  setCam('iso', R); renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/png');
+  camera.position.copy(pos); controls.target.copy(tgt); controls.update();
+  return url;
+}
+
+/* ---------- Excel-Export ---------- */
+function ladeExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  return new Promise((ok, fehler) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    sc.onload = () => ok(window.ExcelJS);
+    sc.onerror = () => fehler(new Error('Excel-Bibliothek konnte nicht geladen werden – Internetverbindung prüfen.'));
+    document.head.appendChild(sc);
+  });
+}
+async function exportXLSX() {
+  $('msg').innerHTML = 'Excel-Datei wird erstellt …';
+  try {
+    const ExcelJS = await ladeExcelJS();
+    const Q = R.P, ML = materialliste(R, Q), B = bom(R);
+    const wb = new ExcelJS.Workbook(); wb.creator = 'Regalinator'; wb.created = new Date();
+    const kopfStil = row => row.eachCell(c => {
+      c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECEAE5' } };
+      c.border = { bottom: { style: 'thin', color: { argb: 'FF999999' } } };
+    });
+    const tabelle = (ws, spalten, zeilen, summe) => {
+      ws.columns = spalten.map(([header, key, width, numFmt]) => ({ header, key, width, style: numFmt ? { numFmt } : {} }));
+      kopfStil(ws.getRow(1)); ws.views = [{ state: 'frozen', ySplit: 1 }];
+      zeilen.forEach(z => ws.addRow(z));
+      if (summe) { const r = ws.addRow(summe); r.font = { bold: true }; r.border = { top: { style: 'thin' } }; }
+    };
+    const profilText = Q.profil.endsWith('x0') ? `${Q.profil.split('x')[0]}×${Q.profil.split('x')[0]} voll` : Q.profil.replace(/^(\d+)x/, '$1×$1×');
+    const holzArt = $('holz_art').selectedOptions[0].text;
+    const ebenen = R.F.reduce((s, f) => s + f.levels.length, 0);
+    const kgS = B.kgS, kgH = B.kgH;
+
+    // Blatt 1: Übersicht mit Zeichnung und 3D-Bild
+    const ue = wb.addWorksheet('Übersicht');
+    ue.columns = [{ width: 30 }, { width: 46 }];
+    ue.addRow([`Regalinator – ${Q.name || 'Regal'}`]).font = { bold: true, size: 16 };
+    ue.addRow([`Erstellt am ${new Date().toLocaleDateString('de-DE')}`]).font = { color: { argb: 'FF666666' } };
+    ue.addRow([]);
+    const info = [
+      ['Regal außen (B × T × H)', `${fmt(R.W)} × ${fmt(R.D)} × ${fmt(R.H)} mm`],
+      ['Verfügbarer Raum (B × T × H)', `${fmt(Q.W)} × ${fmt(Q.T)} × ${fmt(Q.H)} mm`],
+      ['An Kisten angepasst', ['Breite', 'Tiefe', 'Höhe'].filter((_, i) => [Q.fitB, Q.fitT !== false, Q.fitH][i]).join(', ') || 'nein – füllt den Raum'],
+      ['Rahmen', `Vierkantrohr Stahl ${profilText} mm`],
+      ['Boden unter den Kisten', Q.bodenTyp === 'holz' ? `Holzplatte ${Q.holz_s} mm, ${holzArt}` :
+        `Vierkant-Auflagestangen ${Q.stange_profil === 'rahmen' ? profilText : Q.stange_profil.replace(/^([\d.]+)x/, '$1×$1×')} mm, Einrückung ${Q.stange_ein} mm`],
+      ['Abdeckplatte oben', Q.top ? `ja – ${Q.holz_s} mm, ${holzArt}` : 'nein'],
+      ['Bodenabstand', Q.boden > 0 ? `${Q.boden} mm` : '0 mm – unterste Kisten stehen auf dem Boden'],
+      ['Spalt zwischen Kisten / Luft über Kiste', `${Q.gap} mm / ${Q.luft} mm`],
+      ['Fächer', `${R.F.length} (Lichtmaße: ${R.F.map(f => fmt(f.cw)).join(' / ')} mm)`],
+      ['Ebenen', ebenen],
+      ['Euroboxen', R.boxen],
+      ['Stahl', `${(B.mTube / 1000).toFixed(2).replace('.', ',')} m Rohr · ca. ${kgS.toFixed(1).replace('.', ',')} kg`],
+      ['Holz', kgH ? `${(R.parts.filter(p => p.kind === 'board').reduce((s, p) => s + p.lx * p.ly, 0) / 1e6).toFixed(2).replace('.', ',')} m² · ca. ${kgH.toFixed(1).replace('.', ',')} kg` : '–'],
+      ['Gewicht Regal (ohne Kisten)', `ca. ${(kgS + kgH).toFixed(1).replace('.', ',')} kg`],
+      ['Stahl bestellen', ML.map(m => `${m.bars} × ${m.label} à ${fmt(m.stock)} mm`).join('; ') + ` (Sägeschnitt ${Q.kerf} mm)`],
+    ];
+    if (R.errors.length) info.push(['Achtung', R.errors.join(' ')]);
+    info.forEach(([k, v]) => { const r = ue.addRow([k, v]); r.getCell(1).font = { bold: true }; r.getCell(2).alignment = { wrapText: true, vertical: 'top' }; r.getCell(1).alignment = { vertical: 'top' }; });
+    const zg = zeichnung(R);
+    const imgZ = wb.addImage({ base64: zg.url, extension: 'png' });
+    ue.addImage(imgZ, { tl: { col: 2.3, row: 0.3 }, ext: { width: 1000, height: Math.round(1000 * zg.h / zg.w) } });
+    const img3 = wb.addImage({ base64: bild3D(), extension: 'png' });
+    const z3 = info.length + 6;
+    ue.getCell(`A${z3 - 1}`).value = '3D-Ansicht'; ue.getCell(`A${z3 - 1}`).font = { bold: true };
+    const cv = renderer.domElement, h3 = Math.round(560 * cv.height / cv.width);
+    ue.addImage(img3, { tl: { col: 0, row: z3 - 1 }, ext: { width: 560, height: h3 } });
+
+    // Blatt 2: Bestellung
+    const be = wb.addWorksheet('Bestellung');
+    tabelle(be, [['Material', 'm', 34], ['Lieferlänge mm', 'll', 15, '#,##0'], ['Anzahl Stangen', 'n', 15], ['Bestellmenge m', 'bm', 16, '0.00'],
+      ['Bedarf m', 'bd', 12, '0.00'], ['Verschnitt %', 'vs', 13, '0.0'], ['Gewicht kg', 'kg', 12, '0.0']],
+      ML.map(m => ({ m: m.label + ' (Stahl)', ll: m.stock, n: m.bars, bm: m.brutto / 1000, bd: m.netto / 1000, vs: m.verschnitt * 100, kg: m.kg })));
+    be.addRow([]);
+    const holzTeile = {};
+    R.parts.filter(p => p.kind === 'board').forEach(p => { const k = `${p.art}|${Math.round(p.lx)}|${Math.round(p.ly)}|${p.lz}`; holzTeile[k] = (holzTeile[k] || 0) + 1; });
+    if (Object.keys(holzTeile).length) {
+      kopfStil(be.addRow(['Holzplatten', 'Länge mm', 'Breite mm', 'Stärke mm', 'Anzahl', 'Fläche m²', 'Holzart']));
+      Object.entries(holzTeile).forEach(([k, n]) => { const [art, l, b, d] = k.split('|'); be.addRow([art, +l, +b, +d, n, n * l * b / 1e6, holzArt]).getCell(6).numFmt = '0.00'; });
+      be.addRow([]);
+    }
+    kopfStil(be.addRow(['Euroboxen (Außenmaß L × B × H)', 'Anzahl']));
+    Object.entries(B.boxes).sort().forEach(([art, n]) => be.addRow([art + ' mm', n]));
+
+    // Blatt 3: Zuschnitt Stahl
+    const zs = wb.addWorksheet('Zuschnitt Stahl');
+    const stahl = {};
+    for (const p of R.parts) if (p.kind === 'tube' || p.kind === 'rod') {
+      const len = Math.round(p[{ x: 'lx', y: 'ly', z: 'lz' }[p.axis]] * 10) / 10;
+      const profil = p.kind === 'rod' ? `Rund Ø${p.d}` : p.wall > 0 ? `${p.sec}×${p.sec}×${p.wall}` : `${p.sec}×${p.sec} voll`;
+      const kgm = p.kind === 'rod' ? Math.PI * p.d * p.d / 4 * 1000 * STAHL_RHO : (p.sec * p.sec - (p.wall > 0 ? (p.sec - 2 * p.wall) ** 2 : 0)) * 1000 * STAHL_RHO;
+      const k = `${p.art}|${profil}|${len}`;
+      (stahl[k] ||= { art: p.art, profil, len, n: 0, kgm }).n++;
+    }
+    const stahlZeilen = Object.values(stahl).sort((x, y) => x.art.localeCompare(y.art) || y.len - x.len)
+      .map((t, i) => ({ pos: i + 1, teil: t.art, profil: t.profil, len: t.len, n: t.n, ges: t.n * t.len / 1000, kg: t.n * t.len / 1000 * t.kgm }));
+    tabelle(zs, [['Pos.', 'pos', 6], ['Teil', 'teil', 18], ['Profil mm', 'profil', 14], ['Länge mm', 'len', 11, '#,##0.0'], ['Anzahl', 'n', 9],
+      ['Gesamtlänge m', 'ges', 15, '0.00'], ['Gewicht kg', 'kg', 12, '0.0']], stahlZeilen,
+      { teil: 'Summe', n: stahlZeilen.reduce((s, z) => s + z.n, 0), ges: stahlZeilen.reduce((s, z) => s + z.ges, 0), kg: stahlZeilen.reduce((s, z) => s + z.kg, 0) });
+
+    // Blatt 4: Schnittplan
+    const sp = wb.addWorksheet('Schnittplan');
+    const spZeilen = []; ML.forEach(m => { let nr = 1; m.muster.forEach(x => {
+      spZeilen.push({ mat: m.label, nr: x.n > 1 ? `${nr}–${nr + x.n - 1}` : `${nr}`, n: x.n, teile: x.cuts, rest: x.rest }); nr += x.n; }); });
+    tabelle(sp, [['Material', 'mat', 26], ['Stange Nr.', 'nr', 11], ['Anzahl gleiche Stangen', 'n', 22], ['Teile je Stange (mm)', 'teile', 50], ['Rest mm', 'rest', 10, '#,##0']], spZeilen);
+    sp.addRow([]); sp.addRow([`Lieferlänge ${fmt(Q.stock)} mm, Sägeschnitt ${Q.kerf} mm pro Schnitt eingerechnet.`]);
+
+    // Blatt 5: Fächer und Kisten
+    const fk = wb.addWorksheet('Fächer und Kisten');
+    const fkZeilen = [];
+    R.F.forEach((f, fi) => f.levels.forEach((l, li) => {
+      const gruppen = {};
+      l.bx.forEach(b => { const k = `${b.f.replace('x', '×')}×${b.h}${b.quer ? ' quer' : ''}`; gruppen[k] = (gruppen[k] || 0) + 1; });
+      fkZeilen.push({ fach: fi + 1, breite: Math.round(f.cw), ebene: li + 1, stand: Math.round(l.zt), hoehe: l.hmax, n: l.bx.length,
+        kisten: Object.entries(gruppen).map(([k, n]) => `${n} × ${k}`).join(', ') });
+    }));
+    tabelle(fk, [['Fach', 'fach', 7], ['Lichte Breite mm', 'breite', 16, '#,##0'], ['Ebene', 'ebene', 7], ['Standfläche ab Boden mm', 'stand', 23, '#,##0'],
+      ['Höchste Kiste mm', 'hoehe', 17], ['Kisten', 'n', 8], ['Belegung', 'kisten', 48]], fkZeilen, { fach: 'Summe', n: R.boxen });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = `${dateiname()}-materialliste.xlsx`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    $('msg').innerHTML = `<span class="ok">Excel-Datei „${a.download}“ erstellt (Ordner „Downloads“).</span>`;
+    window.__letzteExcel = buf;   // für Tests
+  } catch (e) {
+    $('msg').innerHTML = `<div class="e">Excel-Export fehlgeschlagen: ${e.message}</div>`;
+  }
 }
 window.__regal = () => ({ P, R });
 

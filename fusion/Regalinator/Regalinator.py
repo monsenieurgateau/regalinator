@@ -26,6 +26,8 @@ def json_finden(pfad=None):
     dl = os.path.expanduser('~/Downloads')
     # regalinator*.json, aeltere Exporte hiessen eurobox_regal*.json
     kandidaten = glob.glob(os.path.join(dl, 'regalinator*.json')) + glob.glob(os.path.join(dl, 'eurobox_regal*.json'))
+    # Projektdateien (*.regalinator-projekt.json) sind keine Fusion-Exporte
+    kandidaten = [k for k in kandidaten if 'projekt' not in os.path.basename(k).lower()]
     hier = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'regalinator.json')
     if os.path.exists(hier):
         kandidaten.append(hier)
