@@ -2,6 +2,8 @@
 
 Ein Konfigurator im Browser für Regale aus **Vierkant-Stahlrohr**, in die **Euroboxen** (Euronorm-Behälter, z. B. 600 × 400 und 400 × 300 mm) genau hineinpassen – mit 3D-Vorschau, Materialliste mit Schnittplan und Export nach **Autodesk Fusion**.
 
+**Direkt im Browser ausprobieren: [monsenieurgateau.github.io/regalinator](https://monsenieurgateau.github.io/regalinator/)**
+
 ![Regalinator im Browser](docs/regalinator-browser.png)
 
 ## Was er kann
@@ -18,7 +20,7 @@ Ein Konfigurator im Browser für Regale aus **Vierkant-Stahlrohr**, in die **Eur
 
 ### Im Browser
 
-`index.html` im Browser öffnen – fertig. Es ist keine Installation nötig; für die 3D-Ansicht wird [three.js](https://threejs.org) aus dem Internet geladen. Alle Einstellungen werden im Browser gespeichert.
+Online unter [monsenieurgateau.github.io/regalinator](https://monsenieurgateau.github.io/regalinator/) – oder `index.html` herunterladen und lokal im Browser öffnen. Es ist keine Installation nötig; für die 3D-Ansicht wird [three.js](https://threejs.org) aus dem Internet geladen. Alle Einstellungen werden im Browser gespeichert.
 
 ### In Autodesk Fusion
 
