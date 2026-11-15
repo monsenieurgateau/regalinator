@@ -6,8 +6,12 @@ Ablauf:
   2. "Fuer Fusion exportieren" -> regalinator.json landet in ~/Downloads
   3. In Fusion dieses Skript ausfuehren (Dienstprogramme > Skripte und Zusatzmodule)
      -> nimmt die neueste regalinator*.json aus ~/Downloads und baut neu auf.
+     Findet es keine, kann man die Datei auswaehlen.
+
+Hinweis: Fusion kann die JSON-Datei nicht ueber "Datei > Oeffnen" laden –
+immer dieses Skript benutzen.
 """
-import adsk.core, adsk.fusion, glob, json, os
+import adsk.core, adsk.fusion, glob, json, os, traceback
 
 FEATURES = {'stahl': 'Regal Stahl', 'holz': 'Regal Holz', 'boxen': 'Euroboxen'}
 ALTE_FEATURES = ['Regal Geometrie', 'Euroboxen Geometrie']
@@ -32,9 +36,49 @@ def json_finden(pfad=None):
     if os.path.exists(hier):
         kandidaten.append(hier)
     if not kandidaten:
-        raise FileNotFoundError('Keine regalinator*.json in ~/Downloads gefunden. '
-                                'Erst im HTML-Konfigurator exportieren.')
+        return None
     return max(kandidaten, key=os.path.getmtime)
+
+
+def datei_waehlen(ui):
+    fd = ui.createFileDialog()
+    fd.title = 'Regalinator: Export-Datei (regalinator.json) auswaehlen'
+    fd.filter = 'Regalinator-Export (*.json)'
+    fd.initialDirectory = os.path.expanduser('~/Downloads')
+    if fd.showOpen() == adsk.core.DialogResults.DialogOK:
+        return fd.filename
+    return None
+
+
+def laden(pfad):
+    with open(pfad, encoding='utf-8-sig') as f:
+        try:
+            daten = json.load(f)
+        except ValueError as e:
+            raise ValueError('Die Datei ist kein gueltiges JSON ({}).'.format(e))
+    if isinstance(daten, dict) and daten.get('app') == 'Regalinator':
+        raise ValueError('Das ist eine Projektdatei, kein Fusion-Export. Im Regalinator '
+                         '"Fuer Fusion exportieren" klicken und dann regalinator.json verwenden.')
+    if not isinstance(daten, dict) or not isinstance(daten.get('parts'), list):
+        raise ValueError('Das ist keine Regalinator-Exportdatei (es fehlen die Bauteile).')
+    return daten
+
+
+def design_holen(app):
+    """Konstruktion zum Bauen finden – auch wenn gerade Zeichnung, Fertigung o. ae. aktiv ist."""
+    design = adsk.fusion.Design.cast(app.activeProduct)
+    if design:
+        return design
+    doc = app.activeDocument
+    prod = doc.products.itemByProductType('DesignProductType') if doc else None
+    if prod:
+        ws = app.userInterface.workspaces.itemById('FusionSolidEnvironment')
+        if ws:
+            ws.activate()
+        return adsk.fusion.Design.cast(prod)
+    # kein passendes Dokument offen -> neues Konstruktionsdokument
+    app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
+    return adsk.fusion.Design.cast(app.activeProduct)
 
 
 def finde(app, namen, appearance=False):
@@ -126,7 +170,7 @@ def einfuegen(comp, featname, items, material, appearance):
 
 def baue(daten):
     app = adsk.core.Application.get()
-    design = adsk.fusion.Design.cast(app.activeProduct)
+    design = design_holen(app)
     if design.designType != adsk.fusion.DesignTypes.ParametricDesignType:
         design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
@@ -153,15 +197,34 @@ def baue(daten):
         masse[g] = sum(b.physicalProperties.mass for b in bodies)
 
     app.activeViewport.fit()
-    d = daten['summary']
-    print('Regal {:.0f} x {:.0f} x {:.0f} mm, {} Boxen, {} Teile'.format(
-        d['W'], d['D'], d['H'], d['boxen'], len(daten['parts'])))
-    print('Masse Stahl {:.1f} kg, Holz {:.1f} kg'.format(masse['stahl'], masse['holz']))
+    d = daten.get('summary', {})
+    text = 'Regal {:.0f} x {:.0f} x {:.0f} mm, {} Kisten, {} Teile\nStahl ca. {:.1f} kg, Holz ca. {:.1f} kg'.format(
+        d.get('W', 0), d.get('D', 0), d.get('H', 0), d.get('boxen', 0), len(daten['parts']), masse['stahl'], masse['holz'])
+    print(text)
+    return text
+
+
+def ausfuehren(still=False, pfad=None):
+    """still=True: keine Dialoge (fuer Tests), gibt die Meldung zurueck."""
+    app = adsk.core.Application.get()
+    ui = app.userInterface
+    try:
+        pfad = pfad or json_finden()
+        if pfad is None:
+            if still:
+                raise FileNotFoundError('Keine regalinator.json in Downloads gefunden.')
+            pfad = datei_waehlen(ui)
+            if not pfad:
+                return 'abgebrochen'
+        text = baue(laden(pfad))
+        meldung = 'Regal aufgebaut aus:\n{}\n\n{}'.format(pfad, text)
+    except Exception as e:
+        meldung = 'Das Regal konnte nicht aufgebaut werden:\n\n{}\n\nTechnische Details:\n{}'.format(
+            e, traceback.format_exc()[-1200:])
+    if not still:
+        ui.messageBox(meldung, 'Regalinator')
+    return meldung
 
 
 def run(_context: str):
-    pfad = json_finden()
-    with open(pfad, encoding='utf-8') as f:
-        daten = json.load(f)
-    print('Lade', pfad)
-    baue(daten)
+    ausfuehren()

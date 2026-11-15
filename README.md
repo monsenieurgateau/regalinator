@@ -30,9 +30,11 @@ Online unter [monsenieurgateau.github.io/regalinator](https://monsenieurgateau.g
 
 ![Regalinator in Fusion](docs/regalinator-fusion.png)
 
-1. Einmalig: In Fusion unter **Dienstprogramme → Skripte und Zusatzmodule** auf **+** klicken und den Ordner [`fusion/Regalinator`](fusion/Regalinator) hinzufügen.
-2. Im Browser auf **„Für Fusion exportieren“** klicken – die Datei `regalinator.json` landet im Ordner *Downloads*.
-3. In Fusion das Skript **Regalinator** ausführen. Es nimmt automatisch die neueste Exportdatei und baut das Regal neu auf: Stahl (Material „Steel“), Holz und Kisten als getrennte Körpergruppen.
+1. **Einmalig das Skript einrichten:** Das Repository herunterladen (grüner Knopf **Code → Download ZIP**) und entpacken. In Fusion **Dienstprogramme → Zusatzmodule → Skripte und Zusatzmodule** öffnen, beim Reiter *Skripte* auf **+** klicken und den Ordner `fusion/Regalinator` auswählen.
+2. Im Regalinator auf **„Für Fusion exportieren“** klicken – die Datei `regalinator.json` landet im Ordner *Downloads*.
+3. In Fusion im Dialog *Skripte und Zusatzmodule* **Regalinator** auswählen und **Ausführen** klicken. Das Skript nimmt die neueste Exportdatei aus *Downloads* (findet es keine, kann man sie auswählen), baut das Regal auf – Stahl, Holz und Kisten als getrennte Körpergruppen – und meldet das Ergebnis in einem Fenster.
+
+> Wichtig: Die JSON-Datei **nicht** über *Datei → Öffnen* in Fusion laden – das kann Fusion nicht. Immer über das Skript gehen. Auch die Projektdatei (`*.regalinator-projekt.json`) ist kein Fusion-Export.
 
 ## Aufbau des Regals
 
